@@ -1,0 +1,149 @@
+---
+title: "Karyopharm Patent Vis"
+author: "Adams"
+date: "22/02/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(patentsview)
+library(tidyverse)
+library(lubridate)
+library(zoo)
+
+```
+
+```{r, tibble}
+
+# API query on id isn't requestable and JSON based syntax is just meh
+# but I have left them in anyway
+
+## qry <- qry_funs$eq(assignee_key_id = 119359)
+## qry <- '{"_gt":{"assignee_first_name":"Karyopharm"}}'
+qry <- qry_funs$begins(assignee_organization = "Karyopharm")
+
+# query USPTO API on "Karyopharm" and recieve fields below 
+
+x <- search_pv(query = qry, fields = c("patent_title", "patent_number", "app_date"))
+
+# unnest in order to be able to put recieved data into tibble (df)
+# get rid of unused column
+
+tibble <- x$data$patents %>%  
+  unnest(applications) %>% 
+  select(-app_id)
+
+# date as date and patent number as int
+
+tibble$app_date <- as.Date(tibble$app_date)
+# tibble$patent_number <- as.integer(tibble$patent_number)
+
+# add a patent end date of 20 years from date of filing 
+
+tibble <- tibble %>% 
+  mutate(date_end = (app_date + dyears(20))) 
+
+# order patent number variable by filing date so 
+# plot is ordered on y axis  -  for some
+# reason 'arrange' doesn't work
+
+tibble = tibble[order(tibble$app_date),]
+tibble$patent_number = factor(tibble$patent_number, levels = tibble$patent_number)
+
+# create new column to specify which patents are importnst 
+# (colour them)
+
+tibble <- mutate(tibble, group = ifelse(grepl("transport", patent_title), "'Nuclear Transport'",
+                        ifelse(grepl("Selinexor", patent_title), "Selinexor", "Other")))
+
+```
+
+```{r, plot}
+
+today <- Sys.Date()
+
+vis <- ggplot(tibble, aes(x = app_date, xend = date_end, y = patent_number, yend = patent_number, color = group)) +
+  geom_segment(size = 2) +
+  labs(color = 'Referencing:') +
+  scale_colour_brewer(palette = "Pastel1") +
+  xlab("Date") +
+  ylab("Patent Number") +
+  labs(title = "Karyopharm IP \n") +
+  geom_vline(xintercept = today, linetype = 'dashed') +
+  theme_classic() 
+
+
+vis
+
+```
+
+```{r, bell curve}
+
+
+bell <- tibble %>% 
+  mutate(end_by_yr = format(as.Date(date_end), "%Y")) %>% 
+  group_by(end_by_yr)
+
+bell$end_by_yr <- as.integer(bell$end_by_yr)
+
+ggplot(bell, aes(x = end_by_yr)) +
+  geom_histogram(aes(y = ..density..), bins = 8) +
+  stat_function(fun = dnorm, args = list(mean = mean(bell$end_by_yr), sd = sd(bell$end_by_yr))) +
+  theme_classic() +
+  xlab("Year of Expiration") 
+  
+
+
+```
+
+
+```{r, bell experiment}
+
+# playing around with histogram 
+
+bell_x <- tibble %>% 
+  mutate(end_by_qtr = format(as.yearqtr(date_end), "%Y-%q")) 
+
+bell_x_plot <- bell_x %>% 
+  group_by(end_by_qtr) %>% 
+  summarise(Total = n())
+
+ggplot(bell_x, aes(x = end_by_qtr)) +
+  geom_histogram(stat = "Count", fill = "steelblue") +
+  theme_classic() +
+  theme(aspect.ratio = 0.7) +
+  ylab("Count") +
+  xlab("\n\n Year of Expiration") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  ggtitle("Karyopharm IP Expiraiton by Quarter")
+
+
+```
+
+
+```{r}
+
+d <- bell %>% 
+  arrange(desc(date_end))
+
+# coersion of y-axis in descending date essentially 
+
+d$patent_number = factor(d$patent_number, levels = d$patent_number)
+
+# add a start date to give a sense of scale 
+
+start_x <- d$date_end[24] - 1800
+
+ggplot(d, aes(x = start_x, xend = date_end, y = patent_number, yend = patent_number)) +
+  geom_segment(size = 2.5, color = 'steelblue') +
+  theme_classic() +
+  theme(aspect.ratio = .3) +
+  scale_y_discrete(name = "Patents",
+                   labels = NULL,
+                   breaks = NULL) +
+  scale_x_date(name = "Date of Expiration")
+  
+
+```
+
