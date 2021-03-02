@@ -16,7 +16,8 @@ library(zoo)
 
 ```{r, tibble}
 
-# API query on id isn't requestable and JSON based syntax is just meh
+# API query on 'key_id' isn't requestable 
+# JSON based syntax is just meh
 # but I have left them in anyway
 
 ## qry <- qry_funs$eq(assignee_key_id = 119359)
@@ -80,6 +81,9 @@ vis
 
 ```{r, bell curve}
 
+# groups by just end year - allowing year to be as integer
+# and therefore put into the 'stat_function' producing 
+# the bell curve 
 
 bell <- tibble %>% 
   mutate(end_by_yr = format(as.Date(date_end), "%Y")) %>% 
@@ -105,6 +109,8 @@ ggplot(bell, aes(x = end_by_yr)) +
 bell_x <- tibble %>% 
   mutate(end_by_qtr = format(as.yearqtr(date_end), "%Y-%q")) 
 
+# unused count by year
+
 bell_x_plot <- bell_x %>% 
   group_by(end_by_qtr) %>% 
   summarise(Total = n())
@@ -127,7 +133,7 @@ ggplot(bell_x, aes(x = end_by_qtr)) +
 d <- bell %>% 
   arrange(desc(date_end))
 
-# coersion of y-axis in descending date essentially 
+# coercion of y-axis in descending date essentially 
 
 d$patent_number = factor(d$patent_number, levels = d$patent_number)
 
